@@ -8,16 +8,13 @@
 #import <objc/runtime.h>
 #import <BraintreeDropIn/BraintreeDropIn.h>
 #import <BraintreeDropIn/BTDropInController.h>
-#import <BraintreeCore/BTAPIClient.h>
-#import <BraintreeCore/BTPaymentMethodNonce.h>
-#import <BraintreeCard/BTCardNonce.h>
-#import <BraintreePayPal/BraintreePayPal.h>
-#import <BraintreeApplePay/BraintreeApplePay.h>
-#import <Braintree3DSecure/Braintree3DSecure.h>
-#import <BraintreeVenmo/BraintreeVenmo.h>
+#import <Braintree/BTAPIClient.h>
+#import <Braintree/BTPaymentMethodNonce.h>
+#import <Braintree/BTCardNonce.h>
+#import <Braintree/BraintreePayPal.h>
 #import "AppDelegate.h"
 
-@interface BraintreePlugin() <PKPaymentAuthorizationViewControllerDelegate>
+@interface BraintreePlugin()
 
 @property (nonatomic, strong) BTAPIClient *braintreeClient;
 @property NSString* token;
@@ -92,36 +89,6 @@ NSString *countryCode;
     [self.commandDelegate sendPluginResult:res callbackId:command.callbackId];
 }
 
-- (void)setupApplePay:(CDVInvokedUrlCommand *)command {
-
-    // Ensure the client has been initialized.
-    if (!self.braintreeClient) {
-        CDVPluginResult *res = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"The Braintree client must first be initialized via BraintreePlugin.initialize(token)"];
-        [self.commandDelegate sendPluginResult:res callbackId:command.callbackId];
-        return;
-    }
-
-    if ([command.arguments count] != 3) {
-        CDVPluginResult *res = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Merchant id, Currency code and Country code are required."];
-        [self.commandDelegate sendPluginResult:res callbackId:command.callbackId];
-        return;
-    }
-
-	if ((PKPaymentAuthorizationViewController.canMakePayments) && ([PKPaymentAuthorizationViewController canMakePaymentsUsingNetworks:@[PKPaymentNetworkVisa, PKPaymentNetworkMasterCard, PKPaymentNetworkAmex, PKPaymentNetworkDiscover]])) {
-		applePayMerchantID = [command.arguments objectAtIndex:0];
-		currencyCode = [command.arguments objectAtIndex:1];
-		countryCode = [command.arguments objectAtIndex:2];
-
-		applePayInited = YES;
-
-	    CDVPluginResult *res = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-	    [self.commandDelegate sendPluginResult:res callbackId:command.callbackId];
-    } else {
-	    CDVPluginResult *res = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"ApplePay cannot be used."];
-	    [self.commandDelegate sendPluginResult:res callbackId:command.callbackId];
-    }
-}
-
 - (void)presentDropInPaymentUI:(CDVInvokedUrlCommand *)command {
 
     // Ensure the client has been initialized.
@@ -181,42 +148,12 @@ NSString *countryCode;
             }
         } else {
             if (dropInUIcallbackId) {
-                if (result.paymentOptionType == BTUIKPaymentOptionTypeApplePay ) {
-                    PKPaymentRequest *apPaymentRequest = [[PKPaymentRequest alloc] init];
-                    apPaymentRequest.paymentSummaryItems = @[
-                                                             [PKPaymentSummaryItem summaryItemWithLabel:primaryDescription amount:[NSDecimalNumber decimalNumberWithString: amount]]
-                                                             ];
-                    apPaymentRequest.supportedNetworks = @[PKPaymentNetworkVisa, PKPaymentNetworkMasterCard, PKPaymentNetworkAmex, PKPaymentNetworkDiscover];
-                    apPaymentRequest.merchantCapabilities = PKMerchantCapability3DS;
-                    apPaymentRequest.currencyCode = currencyCode;
-                    apPaymentRequest.countryCode = countryCode;
+				NSDictionary *dictionary = [self getPaymentUINonceResult:result.paymentMethod];
 
-                    apPaymentRequest.merchantIdentifier = applePayMerchantID;
+				CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dictionary];
 
-                    if ((PKPaymentAuthorizationViewController.canMakePayments) && ([PKPaymentAuthorizationViewController canMakePaymentsUsingNetworks:apPaymentRequest.supportedNetworks])) {
-                        PKPaymentAuthorizationViewController *viewController = [[PKPaymentAuthorizationViewController alloc] initWithPaymentRequest:apPaymentRequest];
-                        viewController.delegate = self;
-
-                        applePaySuccess = NO;
-
-                        /* display ApplePay ont the rootViewController */
-                        UIViewController *rootViewController = [[[UIApplication sharedApplication] keyWindow] rootViewController];
-
-                        [rootViewController presentViewController:viewController animated:YES completion:nil];
-                    } else {
-                        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"ApplePay cannot be used."];
-
-                        [self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
-                        dropInUIcallbackId = nil;
-                    }
-                } else {
-                    NSDictionary *dictionary = [self getPaymentUINonceResult:result.paymentMethod];
-
-                    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:dictionary];
-
-                    [self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
-                    dropInUIcallbackId = nil;
-                }
+				[self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
+				dropInUIcallbackId = nil;
             }
         }
     }];
@@ -225,51 +162,7 @@ NSString *countryCode;
 }
 
 #pragma mark - PKPaymentAuthorizationViewControllerDelegate
-- (void)paymentAuthorizationViewController:(PKPaymentAuthorizationViewController *)controller didAuthorizePayment:(PKPayment *)payment completion:(void (^)(PKPaymentAuthorizationStatus status))completion {
-    applePaySuccess = YES;
 
-    BTApplePayClient *applePayClient = [[BTApplePayClient alloc] initWithAPIClient:self.braintreeClient];
-    [applePayClient tokenizeApplePayPayment:payment completion:^(BTApplePayCardNonce *tokenizedApplePayPayment, NSError *error) {
-        if (tokenizedApplePayPayment) {
-            // On success, send nonce to your server for processing.
-            NSDictionary *dictionary = [self getPaymentUINonceResult:tokenizedApplePayPayment];
-
-            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK
-                                                          messageAsDictionary:dictionary];
-
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
-            dropInUIcallbackId = nil;
-
-            // Then indicate success or failure via the completion callback, e.g.
-            completion(PKPaymentAuthorizationStatusSuccess);
-        } else {
-            // Tokenization failed. Check `error` for the cause of the failure.
-            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Apple Pay tokenization failed"];
-
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
-            dropInUIcallbackId = nil;
-
-            // Indicate failure via the completion callback:
-            completion(PKPaymentAuthorizationStatusFailure);
-        }
-    }];
-}
-
-- (void)paymentAuthorizationViewControllerDidFinish:(PKPaymentAuthorizationViewController *)controller {
-    UIViewController *rootViewController = [[[UIApplication sharedApplication] keyWindow] rootViewController];
-
-    [rootViewController dismissViewControllerAnimated:YES completion:nil];
-
-    /* if not success, fire cancel event */
-    if (!applePaySuccess) {
-        NSDictionary *dictionary = @{ @"userCancelled": @YES };
-
-        CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK  messageAsDictionary:dictionary];
-
-        [self.commandDelegate sendPluginResult:pluginResult callbackId:dropInUIcallbackId];
-        dropInUIcallbackId = nil;
-    }
-}
 
 
 #pragma mark - Helpers
@@ -281,9 +174,6 @@ NSString *countryCode;
 
     BTCardNonce *cardNonce;
     BTPayPalAccountNonce *payPalAccountNonce;
-    BTApplePayCardNonce *applePayCardNonce;
-    BTThreeDSecureCardNonce *threeDSecureCardNonce;
-    BTVenmoAccountNonce *venmoAccountNonce;
 
     if ([paymentMethodNonce isKindOfClass:[BTCardNonce class]]) {
         cardNonce = (BTCardNonce*)paymentMethodNonce;
@@ -291,18 +181,6 @@ NSString *countryCode;
 
     if ([paymentMethodNonce isKindOfClass:[BTPayPalAccountNonce class]]) {
         payPalAccountNonce = (BTPayPalAccountNonce*)paymentMethodNonce;
-    }
-
-    if ([paymentMethodNonce isKindOfClass:[BTApplePayCardNonce class]]) {
-        applePayCardNonce = (BTApplePayCardNonce*)paymentMethodNonce;
-    }
-
-    if ([paymentMethodNonce isKindOfClass:[BTThreeDSecureCardNonce class]]) {
-        threeDSecureCardNonce = (BTThreeDSecureCardNonce*)paymentMethodNonce;
-    }
-
-    if ([paymentMethodNonce isKindOfClass:[BTVenmoAccountNonce class]]) {
-        venmoAccountNonce = (BTVenmoAccountNonce*)paymentMethodNonce;
     }
 
     NSDictionary *dictionary = @{ @"userCancelled": @NO,
@@ -328,21 +206,6 @@ NSString *countryCode;
                                           //@"shippingAddress" //TODO
                                           @"clientMetadataId":  (payPalAccountNonce.clientMetadataId == nil ? [NSNull null] : payPalAccountNonce.clientMetadataId),
                                           @"payerId": (payPalAccountNonce.payerId == nil ? [NSNull null] : payPalAccountNonce.payerId),
-                                          },
-
-                                  // BTApplePayCardNonce
-                                  @"applePayCard": !applePayCardNonce ? [NSNull null] : @{
-                                          },
-
-                                  // BTThreeDSecureCardNonce Fields
-                                  @"threeDSecureCard": !threeDSecureCardNonce ? [NSNull null] : @{
-                                          @"liabilityShifted": threeDSecureCardNonce.liabilityShifted ? @YES : @NO,
-                                          @"liabilityShiftPossible": threeDSecureCardNonce.liabilityShiftPossible ? @YES : @NO
-                                          },
-
-                                  // BTVenmoAccountNonce Fields
-                                  @"venmoAccount": !venmoAccountNonce ? [NSNull null] : @{
-                                          @"username": venmoAccountNonce.username
                                           }
                                   };
     return dictionary;
