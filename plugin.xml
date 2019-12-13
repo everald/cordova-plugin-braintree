@@ -49,11 +49,6 @@
     <!-- iOS Configuration -->
     <platform name="ios">
 
-	<!-- Hook to embed iOS frameworks after ios platform added -->
-	    <hook type="after_platform_add" src="scripts/add_embedded_ios_frameworks.js" />
-	<!-- Hook to embed iOS frameworks after installation -->
-	    <hook type="after_plugin_install" src="scripts/add_embedded_ios_frameworks.js" />
-
         <config-file target="config.xml" parent="/*">
             <feature name="BraintreePlugin">
                 <param name="ios-package" value="BraintreePlugin" />
@@ -91,23 +86,15 @@
         <header-file src="src/ios/BraintreePlugin.h" />
         <source-file src="src/ios/BraintreePlugin.m" />
 
-        <framework src="lib/ios/Braintree3DSecure.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeAmericanExpress.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeApplePay.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeCard.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeCore.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeDataCollector.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeDropIn.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreePaymentFlow.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreePayPal.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeUI.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeUIKit.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeUnionPay.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/BraintreeVenmo.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/CardIO.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/PayPalDataCollector.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/PayPalOneTouch.framework" custom="true" embed="true" weak="false" />
-        <framework src="lib/ios/PayPalUtils.framework" custom="true" embed="true" weak="false" />
+        <!-- Braintree SDK -->
+        <podspec>
+            <config>
+                <source url="https://github.com/CocoaPods/Specs.git"/>
+            </config>
+            <pods use-frameworks="true">
+                <pod name="BraintreeDropIn" spec="7.5.0"/>
+            </pods>
+        </podspec>
 
     </platform>
 
